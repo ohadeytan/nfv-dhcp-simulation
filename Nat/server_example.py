@@ -1,64 +1,78 @@
-#!/usr/bin/python
-#
-# pydhcplib
-# Copyright (C) 2008 Mathieu Ignacio -- mignacio@april.org
-#
-# This file is part of pydhcplib.
-# Pydhcplib is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 from pydhcplib.dhcp_packet import *
 from pydhcplib.dhcp_network import *
 import socket
+import cPickle as pickle
 
 # create a socket object
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
 # AWS Public IP
-host = '54.91.182.32'
+host = '34.194.147.243'
 port = 9999
 # connection to hostname on the port.
 s.connect((host, port))                               
-                 
-netopt = {'client_listen_port':"68",
-          'iface': 'eth0',
-          'server_listen_port':"6700",
+
+clientPort = 50000
+netoptS = {'client_listen_port': 50001,
+          'server_listen_port': clientPort,
           'listen_address':"0.0.0.0"
          }
 
-class Server(DhcpServer):
+class ToServer(DhcpServer):
     def __init__(self, options):
         DhcpServer.__init__(self,
-                            #options["iface"],
                             options["listen_address"],
                             options["client_listen_port"],
                             options["server_listen_port"]
                            )
         
     def HandleDhcpDiscover(self, packet):
-	s.send(packet.str())
-	print("sent")        
+	s.send(pickle.dumps((packet, clientPort)))
     def HandleDhcpRequest(self, packet):
-	print packet.str()
+	s.send(pickle.dumps((packet, clientPort)))
     def HandleDhcpDecline(self, packet):
 	print packet.str()        
     def HandleDhcpRelease(self, packet):
 	print packet.str()        
     def HandleDhcpInform(self, packet):
 	print packet.str()
+    def HandleDhcpAll(self, packet):
+        print packet.str()
 
-server = Server(netopt)
-while True :
-    server.GetNextDhcpPacket()                                
+server = ToServer(netoptS)
+
+while True:
+    server.GetNextDhcpPacket()
+    packet, port = pickle.loads(s.recv(4096))
+    server.SendDhcpPacketTo(packet, '255.255.255.255', 50001)
+    print(packet.str())                            
 
 s.close()
 
+'''
+netoptC = {'client_listen_port':68,
+           'server_listen_port':9999,
+           'listen_address':"0.0.0.0"}
+
+class ToClient(DhcpClient):
+    def __init__(self, options):
+        DhcpClient.__init__(self,options["listen_address"],
+                            options["client_listen_port"],
+                            options["server_listen_port"])
+        
+    def HandleDhcpOffer(self, packet):
+        print packet.str()
+    def HandleDhcpAck(self, packet):
+        print packet.str()
+    def HandleDhcpNack(self, packet):
+        print packet.str()        
+
+client = Client(netopt)
+# Use BindToAddress if you want to emit/listen to an internet address (like 192.168.1.1)
+# or BindToDevice if you want to emit/listen to a network device (like eth0)
+client.BindToAddress()
+
+while True :
+    client.GetNextDhcpPacket()
+print client.str()
+'''
