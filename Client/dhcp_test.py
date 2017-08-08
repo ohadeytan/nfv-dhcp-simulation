@@ -72,7 +72,7 @@ def issueRequest(serverip, serverport, timeout, req):
         # Reset the global vars we will use here
         break_wait = 0
         res = None
-        client = DhcpClient(client_listen_port=67, server_listen_port=serverport)
+        client = DhcpClient(client_listen_port=50001, server_listen_port=serverport)
         client.dhcp_socket.settimeout(timeout)
         if serverip == '0.0.0.0':
                 req.SetOption('flags',[128, 0])
@@ -81,7 +81,7 @@ def issueRequest(serverip, serverport, timeout, req):
         pcap_obj = pcap.pcapObject()
         dev = pcap.lookupdev()
         pcap_obj.open_live(dev, 1600, 0, 100)
-        pcap_obj.setfilter("udp port 67", 0, 0)
+        pcap_obj.setfilter("udp port 50001", 0, 0)
         sent = 0
         while break_wait < 1:
                 if(sent < 1):
