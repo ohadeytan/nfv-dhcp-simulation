@@ -1,28 +1,45 @@
 # server.py 
-import socket                                         
-import time
-import cPickle as pickle
 from pydhcplib.type_ipv4 import ipv4
 from pydhcplib.dhcp_packet import *
 from pydhcplib.dhcp_network import *
+from pydhcplib.dhcp_constants import *
 import collections
+from time import sleep
 
-# create a socket object
-serversocket = socket.socket(
-	        socket.AF_INET, socket.SOCK_STREAM) 
+import SocketServer
 
-# get local machine name
-host = '0.0.0.0'                        
+def log(packet, port):
+    print("Type: {:15}      Home: {:3}     Ip: {:15}".format(DhcpFieldsName['dhcp_message_type'][str(packet.GetOption("dhcp_message_type")[0])], int(port)-50000, packet.GetOption("yiaddr")))
 
-port_host = 9999                                           
+class MyTCPHandler(SocketServer.BaseRequestHandler):
+    def handle(self):
+        ackCounter = 0
+        # self.request is the TCP socket connected to the client
+	while True:
+            data_raw = self.request.recv(249, socket.MSG_WAITALL)
+            if len(data_raw) < 249:
+                sleep(1)
+                continue
+            data, port = data_raw[:244], data_raw[-5:]
+            packet = DhcpPacket()
+            packet.DecodePacket(data) 
+            log(packet, port)
+            if packet.IsDhcpDiscoverPacket():
+	        packet.TransformToDhcpOfferPacket()
+	        packet.SetOption('yiaddr', ipv4(chooseIp(port, str(packet.GetOption("chaddr")))).list())
+	        packet.SetOption('siaddr', ipv4(self.client_address[0]).list())
+                extPacket = packet.EncodePacket() + port
+	        self.request.send(extPacket)
 
-# bind to the port
-serversocket.bind((host, port_host))                                  
+            if packet.IsDhcpRequestPacket():
+	        packet.TransformToDhcpAckPacket()
+                extPacket = packet.EncodePacket() + port
+                self.request.send(extPacket)
+                ackCounter += 1
 
-# queue up to 5 requests
-serversocket.listen(5)                                           
-
-clientsocket,addr = serversocket.accept()      
+            log(packet, port)
+            if ackCounter % 100 == 0: 
+                print("-------> Ack Counter = " + str(ackCounter))
 
 d = collections.defaultdict(dict)
 def chooseIp(port, mac):
@@ -32,19 +49,7 @@ def chooseIp(port, mac):
         d[port][mac] = len(d[port])
     return '{}.{}.{}.{}'.format(128+d[port]['subnet'] // 256, d[port]['subnet'] % 256, d[port][mac] // 256, d[port][mac] % 256)  
 
-while True:
-    packet, port = pickle.loads(clientsocket.recv(4096))
-    if packet.IsDhcpDiscoverPacket():
-	packet.TransformToDhcpOfferPacket()
-	packet.SetOption('yiaddr', ipv4(chooseIp(port, str(packet.GetOption("chaddr")))).list())
-	packet.SetOption('siaddr', ipv4(addr[0]).list())
-	clientsocket.send(pickle.dumps((packet, port)))
-
-    if packet.IsDhcpRequestPacket():
-	packet.TransformToDhcpAckPacket()
-	clientsocket.send(pickle.dumps((packet, port)))
-
-    print(packet.str())
-    print(port)
-
-clientsocket.close()
+if __name__ == "__main__":
+    HOST, PORT = '0.0.0.0', 9999
+    server = SocketServer.TCPServer((HOST, PORT), MyTCPHandler)
+    server.serve_forever()
