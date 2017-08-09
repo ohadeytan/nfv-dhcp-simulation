@@ -53,10 +53,10 @@ def preparePacket(xid=None,giaddr='0.0.0.0',chaddr='00:00:00:00:00:00',ciaddr='0
                 req.SetOption('request_ip_address', ipv4(yiaddr).list())
         req.SetOption('dhcp_message_type',[mt])
         return req
-
-serverPort = int(sys.argv[1])
-netoptC = {'client_listen_port': 50001,
-           'server_listen_port': serverPort,
+recvPort = 60000 + int(sys.argv[1])
+sendPort = 50000 + int(sys.argv[1])
+netoptC = {'client_listen_port': recvPort,
+           'server_listen_port': sendPort,
            'listen_address':"0.0.0.0"}
 
 class Client(DhcpClient):
@@ -67,16 +67,18 @@ class Client(DhcpClient):
         
     def HandleDhcpOffer(self, packet):
 	TransformToDhcpRequestPacket(packet)
-	self.SendDhcpPacketTo(packet, '255.255.255.255', serverPort)
+	self.SendDhcpPacketTo(packet, '255.255.255.255', sendPort)
     def HandleDhcpAck(self, packet):
 	pass
     def HandleDhcpNack(self, packet):
 	pass
     def HandleDhcpAll(self, packet):
         if packet.GetOption("xid") != xid:
-             print("Ignored")
+             #print("Ignored")
              packet.SetOption("dhcp_message_type",[0])
-        print packet.str()
+        else:
+             pass
+             #print packet.str()
 
 def TransformToDhcpRequestPacket(packet):
 	packet.SetOption("dhcp_message_type",[3])
@@ -90,7 +92,7 @@ xid = genxid()
 def main():
 	packet = preparePacket(xid, '0.0.0.0', mac, '0.0.0.0', '0.0.0.0', 'discover')
 
-	client.SendDhcpPacketTo(packet, '255.255.255.255', serverPort)
+	client.SendDhcpPacketTo(packet, '255.255.255.255', sendPort)
 
 	while not packet.IsDhcpAckPacket():
 		packet = client.GetNextDhcpPacket()
