@@ -1,4 +1,4 @@
-
+from datetime import datetime
 from random import Random
 from optparse import OptionParser
 from pydhcplib.dhcp_packet import DhcpPacket
@@ -8,13 +8,12 @@ from pydhcplib.type_ipv4 import ipv4
 import socket
 import sys
 import time
-import pcap
-import struct
-import sys
 
 r = Random()
 r.seed()
 
+# the 3 following functions was taken from:
+# https://github.com/dyninc/DHCPTest-python/blob/master/dhcp_test.py
 # generamte a random mac address
 def genmac():
         i = []
@@ -53,6 +52,7 @@ def preparePacket(xid=None,giaddr='0.0.0.0',chaddr='00:00:00:00:00:00',ciaddr='0
                 req.SetOption('request_ip_address', ipv4(yiaddr).list())
         req.SetOption('dhcp_message_type',[mt])
         return req
+
 recvPort = 60000 + int(sys.argv[1])
 sendPort = 50000 + int(sys.argv[1])
 netoptC = {'client_listen_port': recvPort,
@@ -64,7 +64,7 @@ class Client(DhcpClient):
         DhcpClient.__init__(self,options["listen_address"],
                             options["client_listen_port"],
                             options["server_listen_port"])
-        
+         
     def HandleDhcpOffer(self, packet):
 	TransformToDhcpRequestPacket(packet)
 	self.SendDhcpPacketTo(packet, '255.255.255.255', sendPort)
@@ -90,6 +90,8 @@ mac = genmac()
 xid = genxid()
 
 def main():
+	start = datetime.now()
+
 	packet = preparePacket(xid, '0.0.0.0', mac, '0.0.0.0', '0.0.0.0', 'discover')
 
 	client.SendDhcpPacketTo(packet, '255.255.255.255', sendPort)
@@ -97,6 +99,8 @@ def main():
 	while not packet.IsDhcpAckPacket():
 		packet = client.GetNextDhcpPacket()
 
+	end = datetime.now()
+        print('Got ip: {:20}    Latency: {:15}'.format(str(packet.GetOption("yiaddr")) ,end - start))
 
 main()
 
